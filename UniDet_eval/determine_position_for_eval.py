@@ -1,5 +1,6 @@
 
 import os
+from pathlib import Path
 
 import torch
 import json
@@ -17,6 +18,8 @@ from accelerate import Accelerator
 from tqdm import tqdm
 import spacy
 import numpy as np
+
+from PIL import Image, ExifTags
 
 obj_label_map = torch.load('dataset/detection_features.pt')['labels']
 
@@ -119,6 +122,15 @@ def parse_args():
     return args
 
 
+def get_caption(image_fp):
+    if "CAPTIONTOOLONG_" in Path(image_fp).stem:
+        img_pil = Image.open(image_fp)
+        caption = img_pil.getexif()[list(ExifTags.TAGS.keys())[list(ExifTags.TAGS.values()).index('UserComment')]]
+    else:
+        caption = Path(image_fp).stem.split('_')[0]
+    return caption
+
+
 def main():
     args = parse_args()
     model, transform = load_expert_model(task='obj_detection')
@@ -164,7 +176,8 @@ def main():
 
 
                 img_path_split = test_data[k]['image_path'].split('/')
-                prompt = img_path_split[-1].split('_')[0] # get prompt from file names
+                #prompt = img_path_split[-1].split('_')[0] # get prompt from file names
+                prompt = get_caption(test_data[k]['image_path'])
                 vocab_spatial = ['on side of', 'next to', 'near', 'on the left of', 'on the right of', 'on the bottom of', 'on the top of','on top of'] #locality words
 
                 locality = None

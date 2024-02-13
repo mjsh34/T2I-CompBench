@@ -1,9 +1,10 @@
 # image and text similarity
 # ref https://github.com/openai/CLIP
 import os
+from pathlib import Path
 import torch
 import clip
-from PIL import Image
+from PIL import Image, ExifTags
 import spacy
 nlp=spacy.load('en_core_web_sm')
 
@@ -35,7 +36,13 @@ def parse_args():
     return args
 
 
-
+def get_caption(image_fp):
+    if "CAPTIONTOOLONG_" in Path(image_fp).stem:
+        img_pil = Image.open(image_fp)
+        caption = img_pil.getexif()[list(ExifTags.TAGS.keys())[list(ExifTags.TAGS.values()).index('UserComment')]]
+    else:
+        caption = Path(image_fp).stem.split('_')[0]
+    return caption
 
 
 def main():
@@ -56,7 +63,8 @@ def main():
 
         image_path = os.path.join(image_folder,file_name)
         image = preprocess(Image.open(image_path)).unsqueeze(0).to(device)
-        prompt = file_name.split("_")[0]
+        #prompt = file_name.split("_")[0]
+        prompt = get_caption(image_path)
 
         if (args.complex):
             doc=nlp(prompt)

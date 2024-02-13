@@ -1,5 +1,6 @@
 import argparse
 import os
+from pathlib import Path
 
 import torch
 
@@ -10,6 +11,7 @@ import json
 from tqdm.auto import tqdm
 import sys
 import spacy
+from PIL import Image, ExifTags
 
 from BLIP.train_vqa_func import VQA_main
 
@@ -28,7 +30,8 @@ def Create_annotation_for_BLIP(image_folder, outpath, np_index=None):
         image_dict={}
         image_dict['image'] = image_folder+file_name
         image_dict['question_id']= cnt
-        f = file_name.split('_')[0]
+        #f = file_name.split('_')[0]
+        f = get_caption(os.path.join(image_folder, file_name))
         doc = nlp(f)
         
         noun_phrases = []
@@ -71,15 +74,37 @@ def parse_args():
     args = parser.parse_args()
     return args
 
+def get_caption(image_fp):
+    if "CAPTIONTOOLONG_" in Path(image_fp).stem:
+        img_pil = Image.open(image_fp)
+        caption = img_pil.getexif()[list(ExifTags.TAGS.keys())[list(ExifTags.TAGS.values()).index('UserComment')]]
+    else:
+        caption = Path(image_fp).stem.split('_')[0]
+    return caption
+
 def main():
     args = parse_args()
-    np_index = args.np_num #how many noun phrases
+
+    out_dir = args.out_dir
+    images_dir = f"{out_dir}/samples/"
+    noun_chunks_d = {}
+
+    nlp = spacy.load("en_core_web_sm")
+    for img_fn in tqdm(os.listdir(images_dir)):
+        caption = get_caption(os.path.join(images_dir, img_fn))
+        doc = nlp(caption)
+        nc_list = list(doc.noun_chunks)
+        noun_chunks_d[img_fn] = nc_list
+
+    if args.np_num > 0:
+        np_index = args.np_num #how many noun phrases
+    else:
+        max_nclist_size = max(map(len, noun_chunks_d.values()))
+        np_index = max_nclist_size
 
     answer = []
     sample_num = len(os.listdir(os.path.join(args.out_dir,"samples")))
     reward = torch.zeros((sample_num, np_index)).to(device='cuda')
-
-    out_dir = args.out_dir
 
     order="_blip" #rename file
     for i in tqdm(range(np_index)):
